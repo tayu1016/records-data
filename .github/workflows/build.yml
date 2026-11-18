@@ -1,0 +1,28 @@
+name: Release schedule
+on:
+  schedule:
+    - cron: "0 7 * * 4,0"   # after MusicBrainz's twice-weekly dumps (Wed, Sat)
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tables from the latest MusicBrainz dump (CC0 core data)
+        run: |
+          sudo apt-get install -y lbzip2 >/dev/null
+          LATEST=$(curl -sfL https://data.metabrainz.org/pub/musicbrainz/data/fullexport/LATEST)
+          curl -sfL "https://data.metabrainz.org/pub/musicbrainz/data/fullexport/$LATEST/mbdump.tar.bz2" | lbzip2 -dc | \
+            tar -x mbdump/release mbdump/release_country mbdump/release_group mbdump/artist_credit mbdump/iso_3166_1
+          ls -la mbdump
+      - run: python3 build.py mbdump
+      - name: Publish
+        run: |
+          git config user.name "records-data bot"
+          git config user.email "records-data@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet || git commit -m "Release schedule $(date -u +%F)"
+          git push
